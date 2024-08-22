@@ -14,20 +14,23 @@ S3_URI = os.environ["S3_URI"]
 
 client = MedicalImagingWrapper(boto3.client("medical-imaging"))
 
+LOOPS = 10
 image_set_id = "01a726342222ee43e5a0fe375f5dd2a7"
 frame_id = "faae2cb1554b0ff00f4c569a74898909"
 start_time = time.time()
-pixel_data = client.get_pixel_data(DATASTORE_ID, image_set_id, frame_id)
+for i in range(LOOPS):
+    pixel_data = client.get_pixel_data(DATASTORE_ID, image_set_id, frame_id)
 end_time = time.time()
 
-execution_time = end_time - start_time
+execution_time = (end_time - start_time) / LOOPS
 print(
     f"AHI Pixel Data Execution time: {execution_time} seconds, {len(pixel_data)} bytes"
 )
 
 start_time = time.time()
-response = requests.get(S3_URI)
+for i in range(LOOPS):
+    response = requests.get(S3_URI)
 end_time = time.time()
 
-execution_time = end_time - start_time
+execution_time = (end_time - start_time) / LOOPS
 print(f"S3 Execution time: {execution_time} seconds, {len(response.content)} bytes")

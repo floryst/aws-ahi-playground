@@ -27,10 +27,25 @@ print(
     f"AHI Pixel Data Execution time: {execution_time} seconds, {len(pixel_data)} bytes"
 )
 
+s3_client = boto3.client("s3")
+s3_uri_parts = S3_URI.split("/")
+bucket_name = s3_uri_parts[2].split(".")[0]
+file_key = "/".join(s3_uri_parts[3:])
+start_time = time.time()
+for i in range(LOOPS):
+    object = s3_client.get_object(Bucket=bucket_name, Key=file_key)
+    boto_response = object["Body"].read()
+end_time = time.time()
+
+execution_time = (end_time - start_time) / LOOPS
+print(f"Boto S3 Execution time: {execution_time} seconds, {len(boto_response)} bytes")
+
 start_time = time.time()
 for i in range(LOOPS):
     response = requests.get(S3_URI)
 end_time = time.time()
 
 execution_time = (end_time - start_time) / LOOPS
-print(f"S3 Execution time: {execution_time} seconds, {len(response.content)} bytes")
+print(
+    f"Requests S3 Execution time: {execution_time} seconds, {len(response.content)} bytes"
+)

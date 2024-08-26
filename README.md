@@ -45,3 +45,23 @@ fetch(`http://localhost:8000/image-set/${imageSetId}`)
  */
 fetch(`http://localhost:8000/image-set/${imageSetId}/${frame_id}/pixel-data`)
 ```
+
+## HTTP/2 setup
+
+Make certificate
+
+```
+sudo apt-get install openssl
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+```
+
+```
+pip install hypercorn
+hypercorn src.aws_ahi.hello:app --bind 0.0.0.0:8000 --certfile ./cert.pem --keyfile ./key.pem
+```
+
+Start chrome without security
+
+```
+google-chrome --disable-web-security --user-data-dir="/somewhere" --ignore-certificate-errors
+```

@@ -10,11 +10,14 @@ import boto3
 from botocore.exceptions import ClientError
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+import time
+import requests
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 DATASTORE_ID = os.environ["AHI_DATASTORE_ID"]
+
 
 # adapted from the AHI documentation
 class MedicalImagingWrapper:
@@ -131,8 +134,8 @@ class MedicalImagingWrapper:
                 imageFrameInformation={"imageFrameId": image_frame_id},
             )
 
-            assert image_frame['contentType'] == 'application/octet-stream'
-            return image_frame['imageFrameBlob'].read()
+            assert image_frame["contentType"] == "application/octet-stream"
+            return image_frame["imageFrameBlob"].read()
         except ClientError as err:
             logger.error(
                 "Couldn't get image frame. Here's why: %s: %s",
@@ -147,40 +150,46 @@ client = MedicalImagingWrapper(boto3.client("medical-imaging"))
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
-    allow_methods=['*'],
+    allow_origins=["*"],
+    allow_methods=["*"],
     # might want to default to the default set of CORS enabled headers
     # to mimic a real-world scenario (i.e. Content-Range can be CORS-blocked)
-    #allow_headers=['*'],
+    # allow_headers=['*'],
     allow_credentials=True,
 )
+
 
 @app.get("/list-image-sets")
 def list_image_sets():
     image_sets = []
     for image_set in client.search_image_sets(DATASTORE_ID, limit=100):
-        dicom_tags = image_set['DICOMTags']
-        image_sets.append({
-            'imageSetId': image_set['imageSetId'],
-            'PatientId': dicom_tags.get('DICOMPatientId', None),
-            'PatientName': dicom_tags.get('DICOMPatientName', None),
-            'PatientSex': dicom_tags.get('DICOMPatientSex', None),
-            'PatientBirthDate': dicom_tags.get('DICOMPatientBirthDate', None),
-            'StudyDate': dicom_tags.get('DICOMStudyDate', None),
-            'StudyDescription': dicom_tags.get('DICOMStudyDescription', None),
-            'StudyId': dicom_tags.get('DICOMStudyId', None),
-            'StudyInstanceUID': dicom_tags['DICOMStudyInstanceUID'],
-        })
+        dicom_tags = image_set["DICOMTags"]
+        image_sets.append(
+            {
+                "imageSetId": image_set["imageSetId"],
+                "PatientId": dicom_tags.get("DICOMPatientId", None),
+                "PatientName": dicom_tags.get("DICOMPatientName", None),
+                "PatientSex": dicom_tags.get("DICOMPatientSex", None),
+                "PatientBirthDate": dicom_tags.get("DICOMPatientBirthDate", None),
+                "StudyDate": dicom_tags.get("DICOMStudyDate", None),
+                "StudyDescription": dicom_tags.get("DICOMStudyDescription", None),
+                "StudyId": dicom_tags.get("DICOMStudyId", None),
+                "StudyInstanceUID": dicom_tags["DICOMStudyInstanceUID"],
+            }
+        )
     return image_sets
+
 
 @app.get("/image-set/{image_set_id}")
 def get_image_set(image_set_id: str):
     return client.get_image_set_metadata(DATASTORE_ID, image_set_id)
 
+
 @app.get("/image-set/{image_set_id}/{frame_id}/pixel-data")
 def get_pixel_data(image_set_id: str, frame_id: str):
     pixel_data = client.get_pixel_data(DATASTORE_ID, image_set_id, frame_id)
-    return Response(media_type='application/octet-stream', content=pixel_data)
+    return Response(media_type="application/octet-stream", content=pixel_data)
+
 
 # used for exploration/debugging
 def main():
@@ -199,31 +208,83 @@ def main():
 
         for series_uid in series:
             single_series = series[series_uid]
-            print(f'Series UID: {series_uid}')
-            print(f' Number of instances: {len(single_series['Instances'])}')
-        
+            print(f"Series UID: {series_uid}")
+            print(f' Number of instances: {len(single_series["Instances"])}')
+
         # only look at the first one
         series_uid = next(iter(series.keys()))
         single_series = series[series_uid]
-        instances = single_series['Instances']
-        print(f'Looking at series: {series_uid}')
-        print(f'Number of instances: {len(instances)}')
+        instances = single_series["Instances"]
+        print(f"Looking at series: {series_uid}")
+        print(f"Number of instances: {len(instances)}")
 
         # pick first instance
         instance_id = next(iter(instances.keys()))
         instance = instances[instance_id]
         num_frames = len(instance["ImageFrames"])
-        print(f'Number of frames: {num_frames}')
+        print(f"Number of frames: {num_frames}")
 
         # pick middle frame
-        frame = instance['ImageFrames'][num_frames // 2]
-        pixel_data = client.get_pixel_data(DATASTORE_ID, image_set_id, frame['ID'])
+        frame = instance["ImageFrames"][num_frames // 2]
+
+        start_time = time.time()
+        pixel_data = client.get_pixel_data(DATASTORE_ID, image_set_id, frame["ID"])
+        end_time = time.time()
 
         print(type(pixel_data), len(pixel_data))
 
-        with open('frame.bin', 'wb') as fp:
+        with open("frame.bin", "wb") as fp:
             fp.write(pixel_data)
-        print('Wrote out a single HTJ2K frame to frame.bin')
+        print("Wrote out a single HTJ2K frame to frame.bin")
+
+        execution_time = end_time - start_time
+        print(f"Execution time: {execution_time} seconds")
+
+        start_time = time.time()
+        response = requests.get(
+            "https://paulsdicoms.s3.amazonaws.com/ahi/5.000000-2OPASEVZOOMB30f340512060.030.0null-50223/1-31.dcm"
+        )
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Execution time: {execution_time} seconds")
+
+    # s3client = boto3.client("s3")
+
+    # response = s3client.list_buckets(MaxBuckets=123)
+    # pprint(response)
+
+    # s3 = boto3.resource("s3")
+    # bucket_name = "health-image-poc"
+    # bucket = s3.Bucket(bucket_name)
+
+    # # Ensure the base directory exists
+    # os.makedirs("downloaded_files", exist_ok=True)
+
+    # def download_folder_contents(bucket_name, folder_name):
+    #     s3 = boto3.resource("s3")
+    #     bucket = s3.Bucket(bucket_name)
+
+    #     # Ensure the base directory exists
+    #     os.makedirs("downloaded_files", exist_ok=True)
+
+    #     for obj in bucket.objects.filter(Prefix=folder_name):
+    #         if obj.key.endswith("/"):
+    #             continue  # Skip folders
+
+    #         print(obj.key)
+    #         # Ensure directory exists to download the file to
+    #         local_path = os.path.join("downloaded_files", obj.key)
+    #         directory = os.path.dirname(local_path)
+    #         os.makedirs(directory, exist_ok=True)
+
+    #         # Download the file
+    #         bucket.download_file(obj.key, local_path)
+
+    #     print(f"All contents of folder '{folder_name}' downloaded successfully.")
+
+    # # download_folder_contents(bucket_name, "129953")
+    # download_folder_contents(bucket_name, "Dicom-Data/NLST/214369")
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>My HTML Document</title>
+  </head>
+  <body>
+    <h1>Hello, World!</h1>
+
+    <script type="module">
+      const response = await fetch("http://localhost:8000/list-image-sets");
+      const imageSets = await response.json();
+      console.log(imageSets);
+      const imageSet = imageSets[0];
+      const { imageSetId } = imageSet;
+
+      const setResponse = await fetch(
+        `http://localhost:8000/image-set/${imageSetId}`
+      );
+      const imageSetMeta = await setResponse.json();
+      console.log(imageSetMeta);
+      const firstSeries = Object.values(imageSetMeta.Study.Series)[0];
+      const firstInstance = Object.values(firstSeries.Instances)[0];
+      const frameId = firstInstance.ImageFrames[0].ID;
+
+      const pixelDataResponse = await fetch(
+        `http://localhost:8000/image-set/${imageSetId}/${frameId}/pixel-data`
+      );
+      const pixelData = await pixelDataResponse.arrayBuffer();
+      console.log(pixelData);
+    </script>
+  </body>
+</html>
